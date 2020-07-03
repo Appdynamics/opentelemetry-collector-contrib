@@ -15,6 +15,7 @@
 package main
 
 import (
+	"github.com/open-telemetry/opentelemetry-collector-contrib/exporter/appdynamicsexporter"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/component/componenterror"
 	"go.opentelemetry.io/collector/service/defaultcomponents"
@@ -95,6 +96,7 @@ func components() (component.Factories, error) {
 	exporters := []component.ExporterFactoryBase{
 		&stackdriverexporter.Factory{},
 		&azuremonitorexporter.Factory{},
+		&appdynamicsexporter.Factory{},
 		&signalfxexporter.Factory{},
 		sapmexporter.NewFactory(),
 		kinesisexporter.NewFactory(),

@@ -1,0 +1,18 @@
+receivers:
+  examplereceiver:
+
+processors:
+  exampleprocessor:
+
+exporters:
+  appdynamics:
+    endpoint: localhost:8091
+    access_token: accessKey
+
+service:
+  pipelines:
+    traces:
+      receivers: [examplereceiver]
+      processors: [exampleprocessor]
+      exporters: [appdynamics]
+

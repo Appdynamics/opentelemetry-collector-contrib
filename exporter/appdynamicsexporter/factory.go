@@ -15,16 +15,23 @@
 package appdynamicsexporter
 
 import (
+	"bytes"
+	"context"
+	"github.com/golang/protobuf/jsonpb"
 	"go.opentelemetry.io/collector/component"
+	"go.opentelemetry.io/collector/component/componenterror"
 	"go.opentelemetry.io/collector/config/configmodels"
+	"go.opentelemetry.io/collector/consumer/pdata"
+	"go.opentelemetry.io/collector/exporter/exporterhelper"
 	"go.uber.org/zap"
+	"net/http"
 )
 
 const (
 	typeStr = "appdynamics"
 )
 
-// Factory is the factory for the LightStep exporter.
+// Factory is the factory for the AppDynamics exporter.
 type Factory struct {
 }
 
@@ -45,20 +52,42 @@ func (f *Factory) CreateDefaultConfig() configmodels.Exporter {
 	}
 }
 
-// CreateTraceExporter creates a LightStep trace exporter for this configuration.
-func (f *Factory) CreateTraceExporter(_ *zap.Logger, cfg configmodels.Exporter) (component.TraceExporterOld, error) {
+// CreateTraceExporter creates a AppDynamics trace exporter for this configuration.
+func (f *Factory) CreateTraceExporter(
+	ctx context.Context,
+	_ component.ExporterCreateParams,
+	cfg configmodels.Exporter,
+) (component.TraceExporter, error) {
 	config := cfg.(*Config)
-	return &AppDynamicsExporter{
-		endpoint:  config.EndPoint,
-		accessKey: config.AccessToken,
-	}, nil
+	//_ := http.DefaultClient
+	return exporterhelper.NewTraceExporter(config,
+		func(ctx context.Context, td pdata.Traces) (droppedSpans int, err error) {
+			otldpData := pdata.TracesToOtlp(td)
+			var errs []error
+			m := jsonpb.Marshaler{OrigName: true}
+			for _, otlp := range otldpData {
+				var b bytes.Buffer
+				if err := m.Marshal(&b, otlp); err != nil {
+					droppedSpans += 1
+					errs = append(errs, err)
+				} else {
+					_, err := http.DefaultClient.Post(config.EndPoint, "application/json", &b)
+					if err != nil {
+						errs = append(errs)
+						droppedSpans += 1
+					}
+				}
+			}
+			return droppedSpans, componenterror.CombineErrors(errs)
+		})
 }
 
-// CreateMetricsExporter returns nil.
-func (f *Factory) CreateMetricsExporter(logger *zap.Logger, cfg configmodels.Exporter) (component.MetricsExporterOld, error) {
-	config := cfg.(*Config)
-	return &AppDynamicsExporter{
-		endpoint:  config.EndPoint,
-		accessKey: config.AccessToken,
-	}, nil
+
+// CreateMetricsExporter always returns nil.
+func (f *Factory) CreateMetricsExporter(
+	_ context.Context,
+	_ component.ExporterCreateParams,
+	_ configmodels.Exporter,
+) (component.MetricsExporter, error) {
+	return nil, configerror.ErrDataTypeIsNotSupported
 }

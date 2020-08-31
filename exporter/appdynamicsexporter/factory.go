@@ -17,7 +17,7 @@ package appdynamicsexporter
 import (
 	"context"
 	"encoding/json"
-	"fmt"
+	"errors"
 	av1 "github.com/Appdynamics/opentelemetry-ingest/gen/go/pb/appdynamics/v1"
 	tv1 "github.com/Appdynamics/opentelemetry-ingest/gen/go/pb/trace/v1"
 	"go.opentelemetry.io/collector/component"
@@ -84,17 +84,8 @@ func (f *Factory) CreateTraceExporter(_ context.Context, p component.ExporterCre
 
 func (f *Factory) CreateMetricsExporter(_ context.Context, params component.ExporterCreateParams,
 	cfg configmodels.Exporter) (component.MetricsExporter, error) {
-	config := cfg.(*Config)
-	return exporterhelper.NewMetricsExporter(config,
-		func(ctx context.Context, md pdata.Metrics) (int, error) {
-			e := CMSExporter{params: params}
-			payload, droppedTimeSeries := e.pDataToCMS(md)
-			if payload == nil {
-				return droppedTimeSeries, fmt.Errorf("parsing error")
-			}
-			params.Logger.Info("Sending Payload")
-			return droppedTimeSeries, e.pushPayloadToCMS(ctx, config, params, payload)
-		})
+	// TODO : will need to create a metrics exporter
+	return nil, errors.New("NOT YET IMPLEMENTED")
 }
 
 func transform(td pdata.Traces, params component.ExporterCreateParams) *av1.SpansRequest {

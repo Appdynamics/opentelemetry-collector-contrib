@@ -13,3 +13,500 @@
 // limitations under the License.
 
 package appdynamicsexporter
+
+import (
+	"bytes"
+	"context"
+	"encoding/binary"
+	"errors"
+	"fmt"
+	av1 "github.com/Appdynamics/opentelemetry-ingest/gen/go/pb/appdynamics/v1"
+	"github.com/stretchr/testify/assert"
+	"go.opentelemetry.io/collector/component"
+	"go.opentelemetry.io/collector/config/configgrpc"
+	"go.opentelemetry.io/collector/config/configmodels"
+	"go.opentelemetry.io/collector/config/configtls"
+	"go.opentelemetry.io/collector/consumer/pdata"
+	semconventions "go.opentelemetry.io/collector/translator/conventions"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/test/bufconn"
+	"log"
+	"math/rand"
+	"net"
+	"testing"
+	"time"
+)
+
+// NOTE : this trace data type and test cases are taken from :
+//  internal/data/testdata/trace_test.go
+//  may want to request all of these cases made exportable
+
+type traceTestCase struct {
+	name string
+	td   pdata.Traces
+}
+
+func generateAllTraceTestCases() []traceTestCase {
+	return []traceTestCase{
+		{
+			name: "empty-traces",
+			td:   constructEmptyTrace(),
+		},
+		{
+			name: "one-empty-trace",
+			td :  constructOneEmptyTrace(),
+		},
+		{
+			name: "one-empty-one-nil-trace",
+			td :  constructOneEmptyOneNilTrace(),
+		},
+		{
+			name: "one-normal-trace",
+			td:   constructOneNormalTrace(),
+		},
+	}
+}
+
+func constructEmptyTrace() pdata.Traces {
+	traces := pdata.NewTraces()
+	return traces
+}
+
+func constructOneEmptyTrace() pdata.Traces {
+	traces := pdata.NewTraces()
+	traces.ResourceSpans().Resize(1)
+	return traces
+}
+
+func constructOneEmptyOneNilTrace() pdata.Traces {
+	traces := pdata.NewTraces()
+	traces.ResourceSpans().Resize(1)
+
+	resSpan := pdata.NewResourceSpans()
+	traces.ResourceSpans().Append(&resSpan)
+
+	return traces
+}
+
+func constructOneNormalTrace() pdata.Traces {
+	resource := constructResource()
+
+	traces := pdata.NewTraces()
+	traces.ResourceSpans().Resize(1)
+	rspans := traces.ResourceSpans().At(0)
+	resource.CopyTo(rspans.Resource())
+	rspans.InstrumentationLibrarySpans().Resize(1)
+	ispans := rspans.InstrumentationLibrarySpans().At(0)
+	ispans.Spans().Resize(2)
+	constructHTTPClientSpan().CopyTo(ispans.Spans().At(0))
+	constructHTTPServerSpan().CopyTo(ispans.Spans().At(1))
+	return traces
+}
+
+func constructResource() pdata.Resource {
+	resource := pdata.NewResource()
+	resource.InitEmpty()
+	attrs := pdata.NewAttributeMap()
+	attrs.InsertString(semconventions.AttributeServiceName, "signup_aggregator")
+	attrs.InsertString(semconventions.AttributeContainerName, "signup_aggregator")
+	attrs.InsertString(semconventions.AttributeContainerImage, "otel/signupaggregator")
+	attrs.CopyTo(resource.Attributes())
+	return resource
+}
+
+func constructHTTPClientSpan() pdata.Span {
+	attributes := make(map[string]interface{})
+	attributes[semconventions.AttributeComponent] = semconventions.ComponentTypeHTTP
+	attributes[semconventions.AttributeHTTPMethod] = "GET"
+	attributes[semconventions.AttributeHTTPURL] = "https://api.example.com/users/junit"
+	attributes[semconventions.AttributeHTTPStatusCode] = 200
+	endTime := time.Now().Round(time.Second)
+	startTime := endTime.Add(-90 * time.Second)
+	spanAttributes := constructSpanAttributes(attributes)
+
+	span := pdata.NewSpan()
+	span.InitEmpty()
+	span.SetTraceID(newTraceID())
+	span.SetSpanID(newSegmentID())
+	span.SetParentSpanID(newSegmentID())
+	span.SetName("/users/junit")
+	span.SetKind(pdata.SpanKindCLIENT)
+	span.SetStartTime(pdata.TimestampUnixNano(startTime.UnixNano()))
+	span.SetEndTime(pdata.TimestampUnixNano(endTime.UnixNano()))
+
+	status := pdata.NewSpanStatus()
+	status.InitEmpty()
+	status.SetCode(0)
+	status.SetMessage("OK")
+	status.CopyTo(span.Status())
+
+	spanAttributes.CopyTo(span.Attributes())
+	return span
+}
+
+func constructHTTPServerSpan() pdata.Span {
+	attributes := make(map[string]interface{})
+	attributes[semconventions.AttributeComponent] = semconventions.ComponentTypeHTTP
+	attributes[semconventions.AttributeHTTPMethod] = "GET"
+	attributes[semconventions.AttributeHTTPURL] = "https://api.example.com/users/junit"
+	attributes[semconventions.AttributeHTTPClientIP] = "192.168.15.32"
+	attributes[semconventions.AttributeHTTPStatusCode] = 200
+	endTime := time.Now().Round(time.Second)
+	startTime := endTime.Add(-90 * time.Second)
+	spanAttributes := constructSpanAttributes(attributes)
+
+	span := pdata.NewSpan()
+	span.InitEmpty()
+	span.SetTraceID(newTraceID())
+	span.SetSpanID(newSegmentID())
+	span.SetParentSpanID(newSegmentID())
+	span.SetName("/users/junit")
+	span.SetKind(pdata.SpanKindSERVER)
+	span.SetStartTime(pdata.TimestampUnixNano(startTime.UnixNano()))
+	span.SetEndTime(pdata.TimestampUnixNano(endTime.UnixNano()))
+
+	status := pdata.NewSpanStatus()
+	status.InitEmpty()
+	status.SetCode(0)
+	status.SetMessage("OK")
+	status.CopyTo(span.Status())
+
+	spanAttributes.CopyTo(span.Attributes())
+	return span
+}
+
+func constructSpanAttributes(attributes map[string]interface{}) pdata.AttributeMap {
+	attrs := pdata.NewAttributeMap()
+	for key, value := range attributes {
+		if cast, ok := value.(int); ok {
+			attrs.InsertInt(key, int64(cast))
+		} else if cast, ok := value.(int64); ok {
+			attrs.InsertInt(key, cast)
+		} else {
+			attrs.InsertString(key, fmt.Sprintf("%v", value))
+		}
+	}
+	return attrs
+}
+
+func newTraceID() []byte {
+	var r [16]byte
+	epoch := time.Now().Unix()
+	binary.BigEndian.PutUint32(r[0:4], uint32(epoch))
+	_, err := rand.Read(r[4:])
+	if err != nil {
+		panic(err)
+	}
+	return r[:]
+}
+
+func newSegmentID() []byte {
+	var r [8]byte
+	_, err := rand.Read(r[:])
+	if err != nil {
+		panic(err)
+	}
+	return r[:]
+}
+
+
+func TestTransform(t *testing.T) {
+	testsData := generateAllTraceTestCases()
+	var buff bytes.Buffer
+
+	// nothing should start in the buffer
+	assert.True(t, buff.Len() == 0)
+
+	// took tips from : https://developerpod.com/2019/05/27/adding-uber-go-zap-logger-to-golang-project/#3.0
+	encoder := zapcore.NewJSONEncoder(zap.NewProductionEncoderConfig())
+	writeSyncer := zapcore.AddSync(&buff)
+	core := zapcore.NewCore(encoder, writeSyncer, zap.WarnLevel)
+	logger := zap.New(core)
+
+	// TODO : more test cases as in AWS stuff
+	// TODO : need to write a function to verify the output of transform
+	for _, elem := range testsData {
+		Transform(elem.td, *logger)
+	}
+
+	// flush, then check there were no errors
+	logger.Sync()
+	fmt.Println(buff.String())
+	assert.True(t, buff.Len() == 0)
+}
+
+// Helper fucntion to make a zap logger
+func createLogger(buff *bytes.Buffer) *zap.Logger {
+	encoder := zapcore.NewJSONEncoder(zap.NewProductionEncoderConfig())
+	writeSyncer := zapcore.AddSync(buff)
+	core := zapcore.NewCore(encoder, writeSyncer, zap.DebugLevel)
+	return zap.New(core)
+}
+
+// Helper function to create a GRPC config
+func createGRPCClientConfig(endpoint string) configgrpc.GRPCClientSettings {
+	return configgrpc.GRPCClientSettings{
+		Headers: map[string]string{
+			"serverType": "test",
+		},
+		Endpoint:    endpoint,
+		Compression: "gzip",
+		TLSSetting: configtls.TLSClientSetting{
+			Insecure: true,
+		},
+		Keepalive: &configgrpc.KeepaliveClientConfig{
+			Time:                time.Second,
+			Timeout:             time.Second,
+			PermitWithoutStream: true,
+		},
+		ReadBufferSize:  1024,
+		WriteBufferSize: 1024,
+		WaitForReady:    true,
+	}
+}
+
+// Helper function to create a config for the exporter
+func createExporterConfig(config *configgrpc.GRPCClientSettings) Config {
+	return Config{
+		ExporterSettings: configmodels.ExporterSettings{},
+		AccessKey:        "AccKey",
+		Account:          "Acct",
+		Metrics:          MetricsConfig{},
+		Traces:           TracesConfig{
+			Grpc: config,
+		},
+	}
+}
+
+// A server base encapsulates the functionality that will be needed
+//  for all the servers
+	type myListener interface {
+		net.Listener
+		ToDial(context.Context, string) (net.Conn, error)
+	}
+	type server interface {
+		av1.SpanHandlerServer
+		GetConn() myListener
+	}
+	type serverBase struct {
+		*av1.UnimplementedSpanHandlerServer
+		lis myListener
+	}
+	func (s serverBase) GetConn() myListener {
+		return s.lis
+	}
+	func initServer(server server) {
+		s := grpc.NewServer()
+		av1.RegisterSpanHandlerServer(s, server)
+		go func() {
+			if err := s.Serve(server.GetConn()); err != nil {
+				log.Fatalf("Server exited with error: %v", err)
+			}
+		}()
+	}
+
+// These listeners will be used for testing
+	// acts as expected
+	type safeListener struct {
+		*bufconn.Listener
+	}
+	func (myLis safeListener) ToDial(_ context.Context, _ string) (net.Conn, error) {
+		return myLis.Dial()
+	}
+	// will not be able to dial the server
+	type badDialListener struct {
+		*bufconn.Listener
+	}
+	func (myLis badDialListener) ToDial(_ context.Context, _ string) (net.Conn, error) {
+		return nil, errors.New("A proper Dial error")
+	}
+	// will not close the connection correctly
+	type badCloseListener struct {
+		*bufconn.Listener
+	}
+	func (myLis badCloseListener) ToDial(_ context.Context, _ string) (net.Conn, error) {
+		return myLis.Dial()
+	}
+	func (myLis badCloseListener) Close() error {
+		return errors.New("a proper Close error")
+	}
+
+// The normal server used for the typical case
+	type normalServer struct {
+		*serverBase
+	}
+	func (_ normalServer) HandleSpans(_ context.Context, _ *av1.SpansRequest) (*av1.SpansResponse, error) {
+		resp := av1.SpansResponse{}
+		return &resp, nil
+	}
+
+func TestDataPusherNormalServer(t *testing.T) {
+	// First create the Exporter params (essentially a logger)
+	var buff bytes.Buffer
+	logger := createLogger(&buff)
+	p := component.ExporterCreateParams{Logger: logger}
+
+	// Create a configuration for the exporter
+	GRPClientConfig := createGRPCClientConfig("")
+	config := createExporterConfig(&GRPClientConfig)
+
+	// Test with a normal server
+	server := normalServer{
+		&serverBase{
+			&av1.UnimplementedSpanHandlerServer{},
+			safeListener{
+				bufconn.Listen(1024 * 1024),
+			},
+		},
+	}
+	initServer(server)
+
+	// Create the test data and the test function
+	testCases := generateAllTraceTestCases()
+	testDataPusher := createDataPusher(
+		&config, p, grpc.WithContextDialer(server.lis.ToDial))
+
+	droppedSpans, err := testDataPusher(context.Background(), testCases[3].td)
+	assert.True(t, droppedSpans == 0)
+	assert.True(t, err == nil)
+
+	// Flush, then check there were no errors
+	logger.Sync()
+	assert.True(t, buff.Len() == 0)
+}
+
+// test the case the server throws an error when processing the span
+	type badHandleServer struct {
+		*serverBase
+	}
+	func (s badHandleServer) HandleSpans(_ context.Context, _ *av1.SpansRequest) (*av1.SpansResponse, error) {
+		return nil, errors.New("cannot process span")
+	}
+
+func TestDataPusherBadHandleServer(t *testing.T) {
+	// First create the Exporter params (essentially a logger)
+	var buff bytes.Buffer
+	logger := createLogger(&buff)
+	p := component.ExporterCreateParams{Logger: logger}
+
+	// Create a configuration for the exporter
+	GRPClientConfig := createGRPCClientConfig("")
+	config := createExporterConfig(&GRPClientConfig)
+
+	// Test with a normal server
+	server := badHandleServer{
+		&serverBase{
+			&av1.UnimplementedSpanHandlerServer{},
+			safeListener{
+				bufconn.Listen(1024 * 1024),
+			},
+		},
+	}
+	initServer(server)
+
+	// Create the test data and the test function
+	testCases := generateAllTraceTestCases()
+	testDataPusher := createDataPusher(
+		&config, p, grpc.WithContextDialer(server.lis.ToDial))
+
+	droppedSpans, err := testDataPusher(context.Background(), testCases[3].td)
+	assert.True(t, droppedSpans == 1)
+	assert.True(t, err != nil)
+
+	// flush, then check for the correct error
+	logger.Sync()
+	test := logger.Check(zapcore.InfoLevel, "cannot process span")
+	assert.True(t, test.Message == "cannot process span")
+}
+
+// test the case where the cannot dial the server
+	type immediateShutdownServer struct {
+		*serverBase
+	}
+	func (s immediateShutdownServer) HandleSpans(_ context.Context, _ *av1.SpansRequest) (*av1.SpansResponse, error) {
+		return nil, errors.New("should fail to dial and never call this function")
+	}
+
+func TestDataPusherImmediateShutdownServer(t *testing.T) {
+	// First create the Exporter params (essentially a logger)
+	var buff bytes.Buffer
+	logger := createLogger(&buff)
+	p := component.ExporterCreateParams{Logger: logger}
+
+	// Create a configuration for the exporter
+	GRPClientConfig := createGRPCClientConfig("")
+	config := createExporterConfig(&GRPClientConfig)
+
+	// Test with a normal server
+	server := immediateShutdownServer{
+		&serverBase{
+			&av1.UnimplementedSpanHandlerServer{},
+			badDialListener{
+				bufconn.Listen(1024 * 1024),
+			},
+		},
+	}
+	initServer(server)
+
+	// Create the test data and the test function
+	testCases := generateAllTraceTestCases()
+	testDataPusher := createDataPusher(
+		&config, p, grpc.WithContextDialer(server.lis.ToDial))
+
+	droppedSpans, err := testDataPusher(context.Background(), testCases[3].td)
+	assert.True(t, droppedSpans == 1)
+	assert.True(t, err != nil)
+
+	// flush, then check for the correct error
+	logger.Sync()
+	test := logger.Check(zapcore.ErrorLevel, "fail to dial A proper Dial error")
+	assert.True(t, test.Message == "fail to dial A proper Dial error")
+}
+
+// test the case that we cannot close the connection properly
+	type badCloseServer struct {
+		*serverBase
+	}
+	func (s badCloseServer) HandleSpans(_ context.Context, _ *av1.SpansRequest) (*av1.SpansResponse, error) {
+		resp := av1.SpansResponse{}
+		return &resp, nil
+	}
+
+func TestDataPusherBadEndpointServer(t *testing.T) {
+	// First create the Exporter params (essentially a logger)
+	var buff bytes.Buffer
+	logger := createLogger(&buff)
+	p := component.ExporterCreateParams{Logger: logger}
+
+	// Create a configuration for the exporter
+	GRPClientConfig := createGRPCClientConfig("")
+	config := createExporterConfig(&GRPClientConfig)
+
+	// Test with a normal server
+	server := badCloseServer{
+		&serverBase{
+			&av1.UnimplementedSpanHandlerServer{},
+			badCloseListener{
+				bufconn.Listen(1024 * 1024),
+			},
+		},
+	}
+	initServer(server)
+
+	// Create the test data and the test function
+	testCases := generateAllTraceTestCases()
+	testDataPusher := createDataPusher(
+		&config, p, grpc.WithContextDialer(server.lis.ToDial))
+
+	droppedSpans, err := testDataPusher(context.Background(), testCases[3].td)
+	assert.True(t, droppedSpans == 0)
+	assert.True(t, err == nil)
+
+	// Flush, then check for the correct error
+	logger.Sync()
+	test := logger.Check(zapcore.ErrorLevel, "a proper Close error")
+	assert.True(t, test.Message == "a proper Close error")
+}
+

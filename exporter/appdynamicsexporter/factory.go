@@ -26,6 +26,7 @@ import (
 	"go.opentelemetry.io/collector/config/configmodels"
 	"go.opentelemetry.io/collector/consumer/pdata"
 	"go.opentelemetry.io/collector/exporter/exporterhelper"
+	"go.uber.org/zap"
 	"google.golang.org/grpc"
 )
 
@@ -56,55 +57,64 @@ func (f *Factory) CreateDefaultConfig() configmodels.Exporter {
 func (f *Factory) CreateTraceExporter(_ context.Context, p component.ExporterCreateParams,
 	cfg configmodels.Exporter) (component.TraceExporter, error) {
 	config := cfg.(*Config)
-	return exporterhelper.NewTraceExporter(config,
-		func(ctx context.Context, td pdata.Traces) (droppedSpans int, err error) {
-			opts, _ := config.Traces.Grpc.ToDialOptions()
-
-			conn, err := grpc.Dial(config.Traces.Grpc.Endpoint, opts...)
-			if err != nil {
-				p.Logger.Error("fail to dial" + config.Traces.Grpc.Endpoint + err.Error())
-				return droppedSpans, err
-			}
-			defer func () {
-				if err := conn.Close(); err != nil {
-					p.Logger.Error(err.Error())
-				}
-			}()
-
-			client := av1.NewSpanHandlerClient(conn)
-			payload := transform(td, p)
-			
-			if _, err = client.HandleSpans(ctx, payload); err != nil {
-				p.Logger.Info(err.Error())
-				return td.ResourceSpans().Len(), err
-			}
-			return len(payload.ResourceSpans) - td.ResourceSpans().Len(), nil
-		})
+	return exporterhelper.NewTraceExporter(config, createDataPusher(config, p))
 }
 
-func (f *Factory) CreateMetricsExporter(_ context.Context, params component.ExporterCreateParams,
-	cfg configmodels.Exporter) (component.MetricsExporter, error) {
-	// TODO : will need to create a metrics exporter
-	return nil, errors.New("NOT YET IMPLEMENTED")
+func createDataPusher(config *Config, p component.ExporterCreateParams, additionalOps... grpc.DialOption) func(context.Context, pdata.Traces) (droppedSpans int, err error) {
+	return func (ctx context.Context, td pdata.Traces) (droppedSpans int, err error) {
+		opts, _ := config.Traces.Grpc.ToDialOptions()
+		opts = append(opts, additionalOps...)
+
+		var conn *grpc.ClientConn
+		conn, err = grpc.Dial(config.Traces.Grpc.Endpoint, opts...)
+
+		if err != nil {
+			p.Logger.Error("fail to dial " + config.Traces.Grpc.Endpoint + err.Error())
+			droppedSpans = td.ResourceSpans().Len()
+			return
+		}
+		defer func() {
+			if err := conn.Close(); err != nil {
+				p.Logger.Error(err.Error())
+			}
+		}()
+
+		client := av1.NewSpanHandlerClient(conn)
+		payload := Transform(td, *p.Logger)
+
+		if _, err = client.HandleSpans(ctx, payload); err != nil {
+			p.Logger.Info(err.Error())
+			droppedSpans = td.ResourceSpans().Len()
+		} else {
+			droppedSpans = len(payload.ResourceSpans) - td.ResourceSpans().Len()
+		}
+		return
+	}
 }
 
-func transform(td pdata.Traces, params component.ExporterCreateParams) *av1.SpansRequest {
+func Transform(td pdata.Traces, logger zap.Logger) *av1.SpansRequest {
 	otlpSpans := pdata.TracesToOtlp(td)
 	var ret []*tv1.ResourceSpans
 	for _, rs := range otlpSpans {
 		// marshal to json from otlp.ResourceSpan
 		marshal, err := json.Marshal(&rs)
 		if err != nil {
-			params.Logger.Warn(err.Error())
+			logger.Warn(err.Error())
 			continue
 		}
 		// unmarshal it to IngestService.ResourceSpan
 		var irs tv1.ResourceSpans
 		if err := json.Unmarshal(marshal, &irs); err != nil {
-			params.Logger.Warn(err.Error())
+			logger.Warn(err.Error())
 			continue
 		}
 		ret = append(ret, &irs)
 	}
 	return &av1.SpansRequest{ResourceSpans: ret}
+}
+
+func (f *Factory) CreateMetricsExporter(_ context.Context, params component.ExporterCreateParams,
+	cfg configmodels.Exporter) (component.MetricsExporter, error) {
+	// TODO : will need to create a metrics exporter
+	return nil, errors.New("NOT YET IMPLEMENTED")
 }

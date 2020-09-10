@@ -30,9 +30,9 @@ import (
 	semconventions "go.opentelemetry.io/collector/translator/conventions"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
+	"go.uber.org/zap/zaptest"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/test/bufconn"
-	"log"
 	"math/rand"
 	"net"
 	"testing"
@@ -237,14 +237,6 @@ func TestTransform(t *testing.T) {
 	assert.True(t, buff.Len() == 0)
 }
 
-// Helper fucntion to make a zap logger
-func createLogger(buff *bytes.Buffer) *zap.Logger {
-	encoder := zapcore.NewJSONEncoder(zap.NewProductionEncoderConfig())
-	writeSyncer := zapcore.AddSync(buff)
-	core := zapcore.NewCore(encoder, writeSyncer, zap.DebugLevel)
-	return zap.New(core)
-}
-
 // Helper function to create a GRPC config
 func createGRPCClientConfig(endpoint string) configgrpc.GRPCClientSettings {
 	return configgrpc.GRPCClientSettings{
@@ -297,14 +289,16 @@ func createExporterConfig(config *configgrpc.GRPCClientSettings) Config {
 	func (s serverBase) GetConn() myListener {
 		return s.lis
 	}
-	func initServer(server server) {
+	func initServer(server server) *grpc.Server{
 		s := grpc.NewServer()
 		av1.RegisterSpanHandlerServer(s, server)
 		go func() {
 			if err := s.Serve(server.GetConn()); err != nil {
-				log.Fatalf("Server exited with error: %v", err)
+				fmt.Println("server no longer serving : " +
+				err.Error())
 			}
 		}()
+		return s
 	}
 
 // These listeners will be used for testing
@@ -344,8 +338,12 @@ func createExporterConfig(config *configgrpc.GRPCClientSettings) Config {
 
 func TestDataPusherNormalServer(t *testing.T) {
 	// First create the Exporter params (essentially a logger)
-	var buff bytes.Buffer
-	logger := createLogger(&buff)
+	logger := zaptest.NewLogger(t, zaptest.WrapOptions(zap.Hooks(
+			func(e zapcore.Entry) error {
+				t.Fatal(
+					"there should be no logging in the normal case")
+				return nil
+			})))
 	p := component.ExporterCreateParams{Logger: logger}
 
 	// Create a configuration for the exporter
@@ -372,9 +370,8 @@ func TestDataPusherNormalServer(t *testing.T) {
 	assert.True(t, droppedSpans == 0)
 	assert.True(t, err == nil)
 
-	// Flush, then check there were no errors
+	// Flush, the hook should assert there were no errors
 	logger.Sync()
-	assert.True(t, buff.Len() == 0)
 }
 
 // test the case the server throws an error when processing the span
@@ -387,8 +384,22 @@ func TestDataPusherNormalServer(t *testing.T) {
 
 func TestDataPusherBadHandleServer(t *testing.T) {
 	// First create the Exporter params (essentially a logger)
-	var buff bytes.Buffer
-	logger := createLogger(&buff)
+	logAppeared := make(chan bool, 1)
+	logger := zaptest.NewLogger(t, zaptest.WrapOptions(zap.Hooks(
+		func(e zapcore.Entry) error {
+			if e.Level != zap.InfoLevel {
+				t.Fatal(
+					"there should only be one INFO level log")
+			} else {
+				if e.Message != "rpc error: code = Unknown desc = cannot process span" {
+					t.Fatal("incorrect log entry")
+				} else {
+					logAppeared <- true
+					return nil
+				}
+			}
+			return nil
+		})))
 	p := component.ExporterCreateParams{Logger: logger}
 
 	// Create a configuration for the exporter
@@ -415,32 +426,52 @@ func TestDataPusherBadHandleServer(t *testing.T) {
 	assert.True(t, droppedSpans == 1)
 	assert.True(t, err != nil)
 
-	// flush, then check for the correct error
+	// flush, then assert the correct log was written
 	logger.Sync()
-	test := logger.Check(zapcore.InfoLevel, "cannot process span")
-	assert.True(t, test.Message == "cannot process span")
+	select {
+		case b :=<-logAppeared: {
+			assert.True(t, b)
+		}
+		case <-time.After(time.Second):
+			t.Fatal("No log appeared")
+	}
 }
 
 // test the case where the cannot dial the server
-	type immediateShutdownServer struct {
+	type badDialServer struct {
 		*serverBase
 	}
-	func (s immediateShutdownServer) HandleSpans(_ context.Context, _ *av1.SpansRequest) (*av1.SpansResponse, error) {
-		return nil, errors.New("should fail to dial and never call this function")
+	func (s badDialServer) HandleSpans(_ context.Context, _ *av1.SpansRequest) (*av1.SpansResponse, error) {
+		// this will not be used
+		return nil, nil
 	}
 
-func TestDataPusherImmediateShutdownServer(t *testing.T) {
+func TestDataPusherBadDialServer(t *testing.T) {
 	// First create the Exporter params (essentially a logger)
-	var buff bytes.Buffer
-	logger := createLogger(&buff)
+	logAppeared := make(chan bool, 1)
+	logger := zaptest.NewLogger(t, zaptest.WrapOptions(zap.Hooks(
+		func(e zapcore.Entry) error {
+			if e.Level != zap.ErrorLevel {
+				t.Fatal(
+					"there should only be one ERROR level log")
+			} else {
+				if e.Message != "fail to dial badEndpointcontext deadline exceeded" {
+					t.Fatal("incorrect log entry")
+				} else {
+					logAppeared <- true
+					return nil
+				}
+			}
+			return nil
+		})))
 	p := component.ExporterCreateParams{Logger: logger}
 
 	// Create a configuration for the exporter
-	GRPClientConfig := createGRPCClientConfig("")
+	GRPClientConfig := createGRPCClientConfig("badEndpoint")
 	config := createExporterConfig(&GRPClientConfig)
 
 	// Test with a normal server
-	server := immediateShutdownServer{
+	server := badDialServer{
 		&serverBase{
 			&av1.UnimplementedSpanHandlerServer{},
 			badDialListener{
@@ -452,8 +483,11 @@ func TestDataPusherImmediateShutdownServer(t *testing.T) {
 
 	// Create the test data and the test function
 	testCases := generateAllTraceTestCases()
-	testDataPusher := createDataPusher(
-		&config, p, grpc.WithContextDialer(server.lis.ToDial))
+	// TODO : 'WithTimeout' is depricated, will need to use
+	//  DialWithContext within createDataPusher and set
+	//  a deadline within the context
+	testDataPusher := createDataPusher(&config, p,
+		grpc.WithBlock(), grpc.WithTimeout(time.Second))
 
 	droppedSpans, err := testDataPusher(context.Background(), testCases[3].td)
 	assert.True(t, droppedSpans == 1)
@@ -461,8 +495,13 @@ func TestDataPusherImmediateShutdownServer(t *testing.T) {
 
 	// flush, then check for the correct error
 	logger.Sync()
-	test := logger.Check(zapcore.ErrorLevel, "fail to dial A proper Dial error")
-	assert.True(t, test.Message == "fail to dial A proper Dial error")
+	select {
+	case b :=<-logAppeared: {
+		assert.True(t, b)
+	}
+	case <-time.After(time.Second):
+		t.Fatal("No log appeared")
+	}
 }
 
 // test the case that we cannot close the connection properly
@@ -474,10 +513,27 @@ func TestDataPusherImmediateShutdownServer(t *testing.T) {
 		return &resp, nil
 	}
 
-func TestDataPusherBadEndpointServer(t *testing.T) {
+	// TODO : no log is appearing on CLOSE of the connection
+func TestDataPusherCloseServer(t *testing.T) {
 	// First create the Exporter params (essentially a logger)
-	var buff bytes.Buffer
-	logger := createLogger(&buff)
+	logAppeared := make(chan bool, 1)
+	logger := zaptest.NewLogger(t, zaptest.WrapOptions(zap.Hooks(
+		func(e zapcore.Entry) error {
+			if e.Level != zap.ErrorLevel {
+				t.Fatal(
+					"there should only be one ERROR level log")
+			} else {
+				// TODO : when can get the right error out of
+				//  the test, replace "test"
+				if e.Message != "test" {
+					t.Fatal("incorrect log entry")
+				} else {
+					logAppeared <- true
+					return nil
+				}
+			}
+			return nil
+		})))
 	p := component.ExporterCreateParams{Logger: logger}
 
 	// Create a configuration for the exporter
@@ -498,15 +554,21 @@ func TestDataPusherBadEndpointServer(t *testing.T) {
 	// Create the test data and the test function
 	testCases := generateAllTraceTestCases()
 	testDataPusher := createDataPusher(
-		&config, p, grpc.WithContextDialer(server.lis.ToDial))
+		&config, p, grpc.WithContextDialer(server.lis.ToDial),
+		grpc.WithTimeout(time.Second))
 
 	droppedSpans, err := testDataPusher(context.Background(), testCases[3].td)
 	assert.True(t, droppedSpans == 0)
 	assert.True(t, err == nil)
 
-	// Flush, then check for the correct error
+	// flush, then check for the correct error
 	logger.Sync()
-	test := logger.Check(zapcore.ErrorLevel, "a proper Close error")
-	assert.True(t, test.Message == "a proper Close error")
+	select {
+	case b :=<-logAppeared: {
+		assert.True(t, b)
+	}
+	case <-time.After(time.Second):
+		t.Fatal("No log appeared")
+	}
 }
 

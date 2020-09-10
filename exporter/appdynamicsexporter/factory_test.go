@@ -323,9 +323,9 @@ func createExporterConfig(config *configgrpc.GRPCClientSettings) Config {
 	func (myLis badCloseListener) ToDial(_ context.Context, _ string) (net.Conn, error) {
 		return myLis.Dial()
 	}
-	func (myLis badCloseListener) Close() error {
-		return errors.New("a proper Close error")
-	}
+	//func (myLis badCloseListener) Close() error {
+	//	return errors.New("a proper Close error")
+	//}
 
 // The normal server used for the typical case
 	type normalServer struct {
@@ -509,6 +509,7 @@ func TestDataPusherBadDialServer(t *testing.T) {
 		*serverBase
 	}
 	func (s badCloseServer) HandleSpans(_ context.Context, _ *av1.SpansRequest) (*av1.SpansResponse, error) {
+		defer s.GetConn().Close()
 		resp := av1.SpansResponse{}
 		return &resp, nil
 	}

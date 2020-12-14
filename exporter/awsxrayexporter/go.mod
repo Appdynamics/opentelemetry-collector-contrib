@@ -7,7 +7,7 @@ replace github.com/open-telemetry/opentelemetry-collector-contrib/internal/commo
 require (
 	github.com/aws/aws-sdk-go v1.34.10
 	github.com/open-telemetry/opentelemetry-collector-contrib/internal/common/awsxray v0.0.0-00010101000000-000000000000
-	github.com/open-telemetry/opentelemetry-proto v0.4.0
+	github.com/open-telemetry/opentelemetry-proto v0.6.0 // indirect
 	github.com/stretchr/testify v1.6.1
 	go.opentelemetry.io/collector v0.9.0
 	go.uber.org/zap v1.15.0

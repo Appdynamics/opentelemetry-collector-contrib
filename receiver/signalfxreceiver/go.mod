@@ -8,10 +8,10 @@ require (
 	github.com/open-telemetry/opentelemetry-collector-contrib/exporter/signalfxexporter v0.0.0-00010101000000-000000000000
 	github.com/open-telemetry/opentelemetry-collector-contrib/internal/common v0.0.0-00010101000000-000000000000
 	github.com/signalfx/com_signalfx_metrics_protobuf v0.0.1
-	github.com/stretchr/testify v1.6.1
-	go.opencensus.io v0.22.4
-	go.opentelemetry.io/collector v0.9.0
-	go.uber.org/zap v1.15.0
+	github.com/stretchr/testify v1.7.0
+	go.opencensus.io v0.22.5
+	go.opentelemetry.io/collector v0.19.0
+	go.uber.org/zap v1.16.0
 	google.golang.org/protobuf v1.25.0
 )
 

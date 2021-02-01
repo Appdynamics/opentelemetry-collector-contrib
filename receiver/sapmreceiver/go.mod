@@ -10,7 +10,7 @@ require (
 	github.com/open-telemetry/opentelemetry-proto v0.4.0
 	github.com/signalfx/sapm-proto v0.5.3
 	github.com/stretchr/testify v1.6.1
-	go.opencensus.io v0.22.4
+	go.opencensus.io v0.22.6
 	go.opentelemetry.io/collector v0.9.0
 	go.uber.org/zap v1.15.0
 )

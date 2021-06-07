@@ -6,9 +6,9 @@ require (
 	github.com/census-instrumentation/opencensus-proto v0.3.0
 	github.com/iancoleman/strcase v0.0.0-20171129010253-3de563c3dc08
 	github.com/open-telemetry/opentelemetry-collector-contrib/internal/common v0.0.0-00010101000000-000000000000
-	github.com/stretchr/testify v1.6.1
+	github.com/stretchr/testify v1.7.0
 	go.opentelemetry.io/collector v0.9.0
-	go.uber.org/zap v1.15.0
+	go.uber.org/zap v1.17.0
 	google.golang.org/protobuf v1.25.0
 	k8s.io/api v0.18.8
 	k8s.io/apimachinery v0.18.8

@@ -9,7 +9,7 @@ require (
 	github.com/tedsuo/ifrit v0.0.0-20191009134036-9a97d0632f00 // indirect
 	go.opentelemetry.io/collector v0.9.0
 	go.uber.org/zap v1.15.0
-	golang.org/x/net v0.0.0-20200625001655-4c5254603344
-	google.golang.org/grpc v1.31.1
+	golang.org/x/net v0.0.0-20200822124328-c89045814202
+	google.golang.org/grpc v1.39.0
 	google.golang.org/grpc/examples v0.0.0-20200728194956-1c32b02682df // indirect
 )

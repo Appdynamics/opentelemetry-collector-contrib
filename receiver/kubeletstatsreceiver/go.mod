@@ -9,9 +9,9 @@ require (
 	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/redisreceiver v0.0.0-00010101000000-000000000000
 	github.com/pkg/errors v0.9.1
 	github.com/spf13/viper v1.7.1
-	github.com/stretchr/testify v1.6.1
+	github.com/stretchr/testify v1.7.0
 	go.opentelemetry.io/collector v0.9.0
-	go.uber.org/zap v1.15.0
+	go.uber.org/zap v1.18.1
 	google.golang.org/protobuf v1.25.0
 	gopkg.in/yaml.v2 v2.3.0
 	k8s.io/api v0.18.8

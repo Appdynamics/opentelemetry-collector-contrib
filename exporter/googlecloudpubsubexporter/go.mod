@@ -7,11 +7,11 @@ require (
 	github.com/google/uuid v1.3.0
 	github.com/stretchr/testify v1.7.1
 	go.opentelemetry.io/collector v0.51.0
-	go.opentelemetry.io/collector/pdata v0.51.0
+	go.opentelemetry.io/collector/pdata v0.53.0
 	go.uber.org/zap v1.21.0
 	google.golang.org/api v0.79.0
 	google.golang.org/genproto v0.0.0-20220505152158-f39f71e6c8f3
-	google.golang.org/grpc v1.46.2
+	google.golang.org/grpc v1.47.0
 )
 
 require (

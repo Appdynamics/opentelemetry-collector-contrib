@@ -11,8 +11,8 @@ github.com/aws/aws-sdk-go v1.44.11 h1:eIC59RrNY7xXYmGy/kKkLj4PGB325Jca22lcxZwbpB
 github.com/aws/aws-sdk-go v1.44.11/go.mod h1:y4AeaBuwd2Lk+GepC1E9v0qOiTws0MIWAX4oIKwKHZo=
 github.com/aws/aws-sdk-go-v2 v1.6.0/go.mod h1:tI4KhsR5VkzlUa2DZAdwx7wCAYGwkZZ1H31PYrBFx1w=
 github.com/aws/aws-sdk-go-v2/service/route53 v1.6.2/go.mod h1:ZnAMilx42P7DgIrdjlWCkNIGSBLzeyk6T31uB8oGTwY=
-github.com/aws/aws-xray-sdk-go v1.7.0 h1:mATj8779Kj8Ae8oyXZ3S4GeK9BDGHqlLAKGCUiE31o4=
-github.com/aws/aws-xray-sdk-go v1.7.0/go.mod h1:HbE8uL6SJPMGpkaNrG1ahpHXX6rpiswk6EcPiVA4wMU=
+github.com/aws/aws-xray-sdk-go v1.7.1 h1:mji68Db4oWipJ6SiQQuFiWBYWI8sUvPfcv86mLFVKHQ=
+github.com/aws/aws-xray-sdk-go v1.7.1/go.mod h1:aNQo1pqFaaeKaf18CSWCkoaXUI+PQZ7yfNE28YyE2CI=
 github.com/aws/smithy-go v1.4.0/go.mod h1:SObp3lf9smib00L/v3U2eAKG8FyQ7iLrJnQiAmR5n+E=
 github.com/census-instrumentation/opencensus-proto v0.2.1/go.mod h1:f6KPmirojxKA12rnyqOA5BBL4O983OfeGPqjHWSTneU=
 github.com/cespare/xxhash/v2 v2.1.1/go.mod h1:VGX0DQ3Q6kWi7AoAeZDth3/j3BFtOZR5XLFGgcrjCOs=

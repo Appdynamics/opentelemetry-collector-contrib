@@ -4,10 +4,10 @@ go 1.17
 
 require (
 	github.com/open-telemetry/opentelemetry-collector-contrib/pkg/batchpersignal v0.51.0
-	github.com/stretchr/testify v1.7.1
+	github.com/stretchr/testify v1.8.1
 	go.opencensus.io v0.23.0
 	go.opentelemetry.io/collector v0.51.0
-	go.opentelemetry.io/collector/pdata v0.51.0
+	go.opentelemetry.io/collector/pdata v0.66.0
 	go.uber.org/atomic v1.9.0
 	go.uber.org/multierr v1.8.0
 	go.uber.org/zap v1.21.0
@@ -39,17 +39,17 @@ require (
 	go.opentelemetry.io/otel v1.7.0 // indirect
 	go.opentelemetry.io/otel/metric v0.30.0 // indirect
 	go.opentelemetry.io/otel/trace v1.7.0 // indirect
-	golang.org/x/net v0.0.0-20220412020605-290c469a71a5 // indirect
+	golang.org/x/net v0.0.0-20220722155237-a158d28d115b // indirect
 	golang.org/x/oauth2 v0.0.0-20220411215720-9780585627b5 // indirect
-	golang.org/x/sys v0.0.0-20220412211240-33da011f77ad // indirect
-	golang.org/x/text v0.3.7 // indirect
+	golang.org/x/sys v0.2.0 // indirect
+	golang.org/x/text v0.4.0 // indirect
 	golang.org/x/xerrors v0.0.0-20220411194840-2f41105eb62f // indirect
 	google.golang.org/appengine v1.6.7 // indirect
 	google.golang.org/genproto v0.0.0-20220421151946-72621c1f0bd3 // indirect
-	google.golang.org/grpc v1.46.0 // indirect
-	google.golang.org/protobuf v1.28.0 // indirect
+	google.golang.org/grpc v1.51.0 // indirect
+	google.golang.org/protobuf v1.28.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
-	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b // indirect
+	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
 replace github.com/open-telemetry/opentelemetry-collector-contrib/pkg/batchpersignal => ../../pkg/batchpersignal

@@ -9,10 +9,10 @@ require (
 	github.com/open-telemetry/opentelemetry-collector-contrib/exporter/prometheusremotewriteexporter v0.51.0
 	github.com/prometheus/common v0.34.0
 	github.com/prometheus/prometheus v0.35.1-0.20220503184552-2381d7be5731
-	github.com/stretchr/testify v1.7.1
+	github.com/stretchr/testify v1.8.1
 	go.opentelemetry.io/collector v0.51.0
 	go.opentelemetry.io/collector/pdata v0.51.0
-	go.opentelemetry.io/collector/semconv v0.51.0
+	go.opentelemetry.io/collector/semconv v0.69.1
 	go.uber.org/atomic v1.9.0
 	go.uber.org/zap v1.21.0
 	google.golang.org/protobuf v1.28.0
@@ -161,7 +161,7 @@ require (
 	google.golang.org/genproto v0.0.0-20220505152158-f39f71e6c8f3 // indirect
 	google.golang.org/grpc v1.46.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
-	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b // indirect
+	gopkg.in/yaml.v3 v3.0.1 // indirect
 	k8s.io/api v0.24.0 // indirect
 	k8s.io/apimachinery v0.24.0 // indirect
 	k8s.io/client-go v0.24.0 // indirect

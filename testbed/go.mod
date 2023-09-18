@@ -26,13 +26,13 @@ require (
 	github.com/prometheus/common v0.34.0
 	github.com/prometheus/prometheus v0.35.1-0.20220503184552-2381d7be5731
 	github.com/shirou/gopsutil/v3 v3.22.4
-	github.com/stretchr/testify v1.7.1
+	github.com/stretchr/testify v1.8.1
 	go.opentelemetry.io/collector v0.51.0
 	go.opentelemetry.io/collector/pdata v0.51.0
 	go.opentelemetry.io/collector/semconv v0.51.0
 	go.uber.org/atomic v1.9.0
-	go.uber.org/multierr v1.8.0
-	go.uber.org/zap v1.21.0
+	go.uber.org/multierr v1.10.0
+	go.uber.org/zap v1.26.0
 	golang.org/x/text v0.3.7
 )
 
@@ -191,7 +191,7 @@ require (
 	go.opentelemetry.io/otel/sdk v1.7.0 // indirect
 	go.opentelemetry.io/otel/sdk/metric v0.30.0 // indirect
 	go.opentelemetry.io/otel/trace v1.7.0 // indirect
-	go.uber.org/goleak v1.1.12 // indirect
+	go.uber.org/goleak v1.2.0 // indirect
 	golang.org/x/crypto v0.0.0-20220507011949-2cf3adece122 // indirect
 	golang.org/x/mod v0.6.0-dev.0.20220106191415-9b9b3d81d5e3 // indirect
 	golang.org/x/net v0.0.0-20220425223048-2871e0cb64e4 // indirect
@@ -209,7 +209,7 @@ require (
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/ini.v1 v1.66.4 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
-	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b // indirect
+	gopkg.in/yaml.v3 v3.0.1 // indirect
 	k8s.io/api v0.24.0 // indirect
 	k8s.io/apimachinery v0.24.0 // indirect
 	k8s.io/client-go v0.24.0 // indirect

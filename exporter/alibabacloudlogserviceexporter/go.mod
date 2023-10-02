@@ -6,10 +6,10 @@ require (
 	github.com/aliyun/aliyun-log-go-sdk v0.1.35
 	github.com/gogo/protobuf v1.3.2
 	github.com/open-telemetry/opentelemetry-collector-contrib/internal/coreinternal v0.51.0
-	github.com/stretchr/testify v1.7.1
+	github.com/stretchr/testify v1.8.4
 	go.opentelemetry.io/collector v0.51.0
 	go.opentelemetry.io/collector/pdata v0.51.0
-	go.opentelemetry.io/collector/semconv v0.51.0
+	go.opentelemetry.io/collector/semconv v0.86.0
 	go.uber.org/zap v1.21.0
 )
 
@@ -44,7 +44,7 @@ require (
 	google.golang.org/protobuf v1.28.0 // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
-	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b // indirect
+	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
 replace github.com/open-telemetry/opentelemetry-collector-contrib/internal/coreinternal => ../../internal/coreinternal
